@@ -5,8 +5,10 @@ library(magrittr)
 library(moments)
 library(MASS)
 library(GGally)
+library(caret)
+library(doSNOW)
 
-money.ball <- read_csv('C:\\Users\\Brian\\Desktop\\GradClasses\\Summer18\\621\\621week1\\moneyball-training-data.csv')
+money.ball.3 <- read_csv('C:\\Users\\Brian\\Desktop\\GradClasses\\Summer18\\621\\621week1\\moneyball-training-data.csv')
 
 #Missing
 
@@ -29,6 +31,22 @@ money.ball %<>%
 
 money.ball %<>%
   filter(!INDEX %in% c(1347, 2380, 1494, 1769))
+
+#Caret fill in values
+
+dummy.vars <- dummyVars(~ ., data = money.ball.3[, c(-1, -2)])
+train.dummy <- predict(dummy.vars, money.ball.3[, c(-1, -2)])
+
+
+pre.process <- preProcess(train.dummy, method='bagImpute')
+imputed.data <- predict(pre.process, train.dummy)
+
+money.ball <- money.ball.3 %>%
+  mutate(TEAM_BATTING_SO = imputed.data[, 6],
+         TEAM_BASERUN_SB = imputed.data[, 7],
+         TEAM_PITCHING_SO = imputed.data[, 11],
+         TEAM_FIELDING_DP = imputed.data[, 13]
+         )
 
 
 #Fill missing values with median
