@@ -26,23 +26,35 @@ money.ball <- read_csv('C:\\Users\\Brian\\Desktop\\GradClasses\\Summer18\\621\\6
 </div>
 
 <div class='well'>
-The money ball data set contains 2276 observations with 17 variables, all of which of are integers.  few quick calculations indicate that there area several issues with the data that will need to addressed.
+The money ball data set contains 2276 observations with 17 integer variables representing various offensive and defensive baseball statistics collected over the past 100+ years. The below box plots demonstrates the wide range of values that the data holds. Most of the variables contain significant outliers.
 </div>
 
-#MORE
+```{r, warning=FALSE}
+money.ball %>%
+  select(-INDEX) %>%
+  gather() %>%
+  ggplot() +
+    geom_boxplot(aes(key, value)) +
+    scale_y_log10() +
+    coord_flip()
+```
 
-<div class='page-header text-uppercase'>
-  <h3>DATA PREPARATION</h3>
+<div class='well'>
+There is a sizeable amount of missing data as well. For example, the 'hit by pitch' category is missing over 90% of its data. There was a period of time in baseball where hitting a batter with a pitch was considered a ball (and not a free base). This may be part of the reason that this statistic was not tracked.
 </div>
 
 ```{r}
 money.ball %>%
   map_dbl(~sum(is.na(.))/nrow(money.ball)) %>%
-  print()
+  kable()
 ```
 
+<div class='page-header text-uppercase'>
+  <h3>DATA PREPARATION</h3>
+</div>
+
 <div class='well'>
-The TEAM_BASERUN_CS statistic and TEAM_BATTING_HBP statistics are missing a sizeable amount of observations. When a statistics is missing a few observation (for example, TEAM_PITCHING_SO) modifications can be made to address this issue. However, when such a large proportion are missing I think its better to ignore these columns.
+The TEAM_BASERUN_CS statistic and TEAM_BATTING_HBP statistics are missing a sizeable amount of observations. When a statistic is missing a few observation (for example, TEAM_PITCHING_SO) modifications can be made to address this issue. However, as such a large proportion are missing I think its better to ignore these columns.
 </div>
 
 ```{r}
@@ -51,12 +63,13 @@ money.ball %<>%
 ```
 
 <div class='well'>
-There are 19 rows that are missing essentially all of their information. This would require esitimating so much of their information that I do not believe it is representative of the original team. These observations will be removed.
+There are 19 observations that are missing large chunks of information. This would require estimating so much of their information that I do not believe it is representative of the original team. These observations will be removed.
 </div>
 
 ```{r}
 money.ball %>%
   filter(TEAM_BATTING_SO == 0) %>%
+  select(INDEX, TEAM_BATTING_SO, TEAM_BASERUN_SB, TEAM_PITCHING_SO, TEAM_FIELDING_DP) %>%
   kable('html') %>%
   kable_styling(bootstrap_options = c('striped', 'hover'))
 
@@ -65,7 +78,7 @@ money.ball %<>%
 ```
 
 <div class='well'>
-There are 4 observations whose values lead me to believe they are mistakes. This includes a team with 0 wins and 3 teams with certain statistics so much larger than any other team. I believe these may be extrapolation errors. These observations have been removed.
+There are 4 observations whose values lead me to believe they are mistakes. This includes a team with 0 wins and 3 teams with certain statistics much larger than any other team. I believe these may be extrapolation errors. These observations have been removed.
 </div>
 
 ```{r}
@@ -96,10 +109,6 @@ money.ball %<>%
   select(-INDEX)
 ```
 
-<div class='well'>
-The data is now ready for model building.
-</div>
-
 <div class='page-header text-uppercase'>
   <h3>BUILD MODEL</h3>
 </div>
@@ -113,10 +122,16 @@ l.all <- lm(TARGET_WINS ~ ., money.ball)
 summary(l.all)
 ```
 
-$$\widehat{WINS}=0.041\times BATTING_H + -0.017\times BATTING_{2B} + 0.067\times BATTING_{3B} + 0.051\times BATTING{HR} + 0.021\times BATTING_{BB} + -0.014\times BATTING_{SO} + 0.035\times BASERUN_{SB} + 0.001\times PITCHING_{H} + 0.030\times PITCHING_{HR} + -0.010\times PITCHING_{BB} + 0.005\times PITCHING_{SO} + -0.030\times FIELDING_{E} + -0.111\times FIELDING_{DP} + 31.561$$
+$$\widehat{WINS}=0.041\times BATTING_H + -0.017\times BATTING_{2B} + 0.067\times BATTING_{3B} + 0.051\times BATTING_{HR} + $$
+
+$$ 0.021\times BATTING_{BB} + -0.014\times BATTING_{SO} + 0.035\times BASERUN_{SB} + 0.001\times PITCHING_{H} + $$
+
+$$ 0.030\times PITCHING_{HR} + -0.010\times PITCHING_{BB} + 0.005\times PITCHING_{SO} + -0.030\times FIELDING_{E} + $$
+
+$$ -0.111\times FIELDING_{DP} + 31.561$$
 
 <div class='well'>
-The first model meets all the assumptions for linear regression and thus is a valid model. However, despite this, there is much left to be desired by this model. First, it is incredibly complex, featuring 13 predictors, including 4 that are not statistically significant. Many of the predictors are highly correlated. There are a few instances of simpsons perceived paradox in the coefficients of the predictors. 'Doubles' (TEAM_BATTING_2B) has a negative slope which seems to indicate that as more doubles are hit, the number of wins decreases and 'homeruns allowed' (TEAM_PITCHING_HR) has a positive slope which seems to indicate that as more homeruns are allowed, the number of wins increases.
+This model meets all the required assumptions for regression [see appendix]. However, there is much left to be desired by this model. First, it is incredibly complex, featuring 13 predictors, including 4 that are not statistically significant. Many of the predictors are highly correlated. There are a few instances of simpsons perceived paradox in the coefficients of the predictors. 'Doubles' (TEAM_BATTING_2B) has a negative slope which seems to indicate that as more doubles are hit, the number of wins decreases and 'homeruns allowed' (TEAM_PITCHING_HR) has a positive slope which seems to indicate that as more homeruns are allowed, the number of wins increases.
 
 This model is a good baseline, but it can be improved.
 </div>
@@ -126,25 +141,26 @@ The second model will be built with backwards selection.
 </div>
 
 ```{r}
-l.back <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_2B + TEAM_BATTING_3B + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_BATTING_SO + TEAM_BASERUN_SB +
-              TEAM_FIELDING_E + TEAM_FIELDING_DP, money.ball)
+l.back <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_2B + TEAM_BATTING_3B + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_BATTING_SO + TEAM_BASERUN_SB + TEAM_FIELDING_E + TEAM_FIELDING_DP, money.ball)
 summary(l.back)
 ```
 
-$$\widehat{WINS}=0.042\times BATTING_H + -0.017\times BATTING_{2B} + 0.065\times BATTING_{3B} + 0.080\times BATTING{HR} + 0.001\times BATTING_{BB} + -0.008\times BATTING_{SO} + 0.033\times BASERUN_{SB} + -0.027\times FIELDING_{E} + -0.109\times FIELDING_{DP} + 30.576$$
+$$\widehat{WINS}=0.042\times BATTING_H + -0.017\times BATTING_{2B} + 0.065\times BATTING_{3B} + 0.080\times BATTING_{HR} + $$
+$$ 0.001\times BATTING_{BB} + -0.008\times BATTING_{SO} + 0.033\times BASERUN_{SB} + -0.027\times FIELDING_{E} + $$
+$$ -0.109\times FIELDING_{DP} + 30.576$$
 
 <div class='well'>
-This model is a marked improvement over the previous one. It has removed 4 predictors but remains just as accurate as the first model. This would appear to indicate that those predictors either had little to no predictive value or that they were correlated with some other predictor that does have value.
+This model also meets all the assumptions for regression [see appendix]. This model is a marked improvement over the previous one. It has removed 4 predictors but remains just as accurate as the first model. The $R^2$ of both models is about $0.29$. This would appear to indicate that those predictors either had little to no predictive value or that they were correlated with some other predictor that does have value. This model also addresses a high leverage point that was present in the first model.
 
-We will try to get a bit more out there for the final model.
+We will try to get a bit agressive with the final model.
 </div>
 
 <div class='alert alert-info'>
-The third model will be built with newly created variables.
+The third model will be built with newly created variables and provide me with some added leeway in making model decisions.
 </div>
 
 <div class='well'>
-I began by combining all the positive batting statistics. Each statistic is weighted by the number of bases the player advances. Singles, walks, and stolen base are weighted 1, doubles are weighted 2, triples are weighted 3 and homeruns are weighted 4. The new observation is called TEAM_BATTING_POS. The goals is to represent the number of bases of advancement each team produces each season. It should also mitigate or remove the presence of simpsons perceived paradox.
+I began by combining all the positive batting statistics. Each statistic is weighted by the number of bases a player advances. Singles, walks, and stolen base are weighted 1, doubles are weighted 2, triples are weighted 3 and homeruns are weighted 4. The new observation is called TEAM_BATTING_POS. The goals is to represent the number of bases of advancement each team produces each season. It should also mitigate or remove the presence of simpsons perceived paradox.
 
 I also removed the TEAM_FIELD_DP column. Although I had previously left it in, with over 10% of observations being imputed, it made me uncomfortable of the predictive value of the column. 
 
@@ -160,32 +176,40 @@ money.ball.2 <- money.ball %>%
   dplyr::select(-TEAM_FIELDING_DP) %>%
   filter(row_number() != 1)
 
-l.combine <- lm(TARGET_WINS ~ TEAM_BATTING_SO + TEAM_PITCHING_BB + TEAM_PITCHING_SO + TEAM_FIELDING_E +
+l.combine <- lm(TARGET_WINS ~ TEAM_BATTING_SO + TEAM_PITCHING_BB + log(TEAM_PITCHING_SO) + TEAM_FIELDING_E +
                   TEAM_BATTING_POS, money.ball.2)
 summary(l.combine)
 ```
 
-$$\widehat{WINS}=0.028\times BATTING_{POS} + -0.027\times BATTING_{SO} + -0.014\times PITCHING_{BB} + 0.0115\times PITCHING_{SO} + -0.015\times FIELDING_{E} + 30.576$$
+$$\widehat{WINS}=0.028\times BATTING_{POS} + -0.027\times BATTING_{SO} + -0.014\times PITCHING_{BB} $$
+$$+ 19.013\times log(PITCHING_{SO}) + -0.015\times FIELDING_{E} + 30.576$$
 
 <div class='well'>
-DISCUSS: FIND R2, F-statistics, MEAN SQUARED ERROR, RESIDUAL PLOTS
+This model meets all the assumptions for regression. [see appendix]
 
-While this model does lose some predictive power, it may be considered a worthy tradeoff. First, it has the fewest predictors of any of the models at 5. In addition, none of the predictors fall victim to simpson's perceived paradox and thus make intuitive and logical sense. This may aid in understanding for general managers and non-statistically inclinded people. Each predictor is highly significant, indicating that we have boiled down the information to the most critical pieces of information. 
+While this model does lose some predictive power with $R^2$ of $0.265$ down from $0.29$, it may be considered a worthy tradeoff. First, it has the fewest predictors of any of the models at 5. In addition, none of the predictors fall victim to simpson's perceived paradox and thus make intuitive and logical sense. This may aid in understanding for general managers and non-statistically inclinded people. Each predictor is highly significant, indicating that we have boiled down the information to the most critical pieces of information.
+
+There does still appears to be high collinearity in the model, however, this was present in all 3 of the created models.
 </div>
+
+```{r}
+round(cor(money.ball.2[,c(-1, -3, -4)]),2) %>%
+  kable()
+```
 
 <div class='page-header text-uppercase'>
   <h3>SELECT MODELS</h3>
 </div>
 
 <div class='well'>
-Ultimately, I selected the third model. While it does have the least predictive power, that small loss is offset by intuitive logic of the model and it's more simple make up. 
+Ultimately, I selected the third model. While it does have the least predictive power, that small loss is offset by the intuitive logic of the model and it's more simple make up. 
 
 There are a number of issues with the dataset that should be considered. The data provided was collected for a period of time yet it lacked the time information. Thus the assumption that the residuals are independent could not be checked. This is important as the data was collected over a long period of time and the game of baseball has changed immensly in that time. Just how helpful is data from the 1800s for predicting games in 2000? I would imagine very little. 
 
-The model was used to predict the data of the test set. The results are below.
+The model was used to predict the data of the test set. A sample of the results are below.
 </div>
 
-```{r}
+```{r, message=FALSE}
 test.set <- read_csv('C:\\Users\\Brian\\Desktop\\GradClasses\\Summer18\\621\\621week1\\moneyball-evaluation-data.csv') 
 
 dummy.vars <- dummyVars(~ ., data = test.set[, -1])
@@ -207,18 +231,56 @@ test.set %<>%
   select(-TEAM_BATTING_H, -TEAM_BATTING_1B, -TEAM_BATTING_BB, -TEAM_BATTING_P1, -TEAM_BATTING_2B, -TEAM_BATTING_3B, -TEAM_BATTING_HR, -TEAM_BASERUN_SB) %>%
   select(-TEAM_FIELDING_DP, -INDEX) 
 
-predict(l.combine, newdata = test.set, interval='prediction')
+predict(l.combine, newdata = test.set, interval='prediction') %>%
+  head(10) %>%
+  kable('html') %>%
+  kable_styling(bootstrap_options = c('striped', 'hover'))
 ```
 
+<div class='well'>
+In conclusion, a successfull regression was fit using 5 predictors with an $R^2$ of approximately $0.265$. This information was used to make predictions for a test set. The model is ready for deployment by the general managers however I wish to stress that without verifying the effect of collecting information over the course of a century, there are still concerns regarding the complete veracity of the information.
+</div>
 
+<div class='page-header text-uppercase'>
+  <h3>Appendix</h3>
+</div>
 
+<div class='well'>
+Assumptions must be validated to ensure that the regression model is valid. A light review was the first two models is followed by a more indepth review of the final, selected model.
+</div>
 
-
+<div class='alert alert-info'>
+Model #1
+</div>
 
 ```{r}
-money.ball %>%
-  gather() %>%
-  ggplot() +
-    geom_boxplot(aes(key, value)) +
-    coord_flip()
+par(mfrow=c(2,2))
+plot(l.all)
 ```
+
+<div class='alert alert-info'>
+Model #2
+</div>
+
+```{r}
+par(mfrow=c(2,2))
+plot(l.back)
+```
+
+<div class='alert alert-info'>
+Model #3
+</div>
+
+```{r}
+par(mfrow=c(2,2))
+plot(l.combine)
+```
+
+```{r}
+par(mfrow=c(2,3))
+termplot(l.combine, partial.resid=TRUE, smooth=panel.smooth, terms=1:5)
+```
+
+<div class='well'>
+The first set of plots shows that there is (mostly) constant variance in the residuals, and the data is roughly normal. We are unable to test that the residuals are independent due to a lack of dates and years for the data. We will assume independence. The second set of graphs demonstrates that each variable is linearly related to the outcome. This required a log transformation on TEAM_PITCHING_SO. It appears that there might be need for a quadradic transformation on some of the other variables however this did not greatly improve the $R^2$ value and the effect is quite subtle. I believe the appropriate decision is to leave them untransformed.
+</div>
